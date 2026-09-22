@@ -1,0 +1,615 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum HouseholdRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+}
+
+enum TransactionSource {
+  MANUAL
+  CSV_IMPORT
+  XLSX_IMPORT
+  BANK_API
+  EMAIL_RECEIPT
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  IMPORT
+  INVITE
+  RESTORE
+}
+
+enum NotificationType {
+  BUDGET_WARNING
+  BUDGET_EXCEEDED
+  GOAL_MILESTONE
+  SYSTEM
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  CASH
+  INVESTMENT
+}
+
+enum LiabilityType {
+  CREDIT_CARD
+  LOAN
+  MORTGAGE
+  OTHER
+}
+
+enum RecurrenceFrequency {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum BudgetRecurrence {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum RecurringPatternStatus {
+  DETECTED
+  CONFIRMED
+  DISMISSED
+}
+
+enum GoalContributionSource {
+  MANUAL
+  AUTO
+  TRANSFER
+}
+
+enum BankConnectionStatus {
+  PENDING
+  CONNECTED
+  ERROR
+  DISCONNECTED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum SubscriptionAction {
+  CREATED
+  UPDATED
+  PAUSED
+  RESUMED
+  CANCELLED
+}
+
+enum ReminderEntityType {
+  LIABILITY
+  RECURRING_OBLIGATION
+  SUBSCRIPTION
+}
+
+enum OwnershipTransferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum DeletionRequestStatus {
+  PENDING
+  CANCELLED
+  COMPLETED
+}
+
+model User {
+  id          String       @id @default(cuid())
+  authSubject String?      @unique
+  email       String       @unique
+  name        String?
+  memberships Membership[]
+  auditEvents AuditLog[]
+  preferences UserPreference?
+  notifications Notification[]
+  invitationsSent HouseholdInvitation[] @relation("InvitationSender")
+  ownershipTransfersFrom OwnershipTransferRequest[] @relation("OwnershipTransferFrom")
+  ownershipTransfersTo OwnershipTransferRequest[] @relation("OwnershipTransferTo")
+  deletionRequests AccountDeletionRequest[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Household {
+  id           String        @id @default(cuid())
+  name         String
+  currency     String        @default("INR")
+  memberships  Membership[]
+  transactions Transaction[]
+  budgets      Budget[]
+  goals        Goal[]
+  accounts     Account[]
+  liabilities Liability[]
+  recurringObligations RecurringObligation[]
+  transfers    TransactionTransfer[]
+  accountSnapshots AccountBalanceSnapshot[]
+  netWorthSnapshots NetWorthSnapshot[]
+  liabilityPayments LiabilityPayment[]
+  recurringPatterns RecurringPattern[]
+  reminderSchedules ReminderSchedule[]
+  budgetTemplates BudgetTemplate[]
+  goalContributions GoalContribution[]
+  bankConnections BankConnection[]
+  bankSyncLogs BankSyncLog[]
+  subscriptions Subscription[]
+  subscriptionEvents SubscriptionEvent[]
+  ownershipTransfers OwnershipTransferRequest[]
+  deletionRequests AccountDeletionRequest[]
+  invitations  HouseholdInvitation[]
+  notifications Notification[]
+  auditEvents  AuditLog[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model HouseholdInvitation {
+  id          String        @id @default(cuid())
+  householdId String
+  household   Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  email       String
+  role        HouseholdRole @default(MEMBER)
+  tokenHash   String        @unique
+  invitedById String
+  invitedBy   User          @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  @@index([householdId, email, acceptedAt])
+}
+
+model UserPreference {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locale             String   @default("en-US")
+  weekStartsOn       Int      @default(0)
+  emailNotifications Boolean  @default(true)
+  budgetAlerts       Boolean  @default(true)
+  goalAlerts         Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  householdId String
+  household   Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  title       String
+  message     String
+  dedupeKey   String
+  linkedEntityType String?
+  linkedEntityId String?
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, householdId, readAt, createdAt])
+}
+
+model RateLimitBucket {
+  key       String   @id
+  count     Int
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
+model Membership {
+  id          String        @id @default(cuid())
+  role        HouseholdRole @default(MEMBER)
+  userId      String
+  householdId String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  household   Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+
+  @@unique([userId, householdId])
+  @@index([householdId, role])
+}
+
+model Transaction {
+  id            String            @id @default(cuid())
+  householdId   String
+  household     Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  accountId     String?
+  account       Account?          @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  transferId    String?
+  transfer      TransactionTransfer? @relation(fields: [transferId], references: [id], onDelete: SetNull)
+  recurringPatternId String?
+  recurringPattern RecurringPattern? @relation(fields: [recurringPatternId], references: [id], onDelete: SetNull)
+  description   String
+  merchant      String
+  category      String
+  paymentType   String
+  amount        Decimal           @db.Decimal(14, 2)
+  type          TransactionType
+  source        TransactionSource @default(MANUAL)
+  transactionAt DateTime
+  externalId    String?
+  isRecurring   Boolean           @default(false)
+  deletedAt     DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([householdId, externalId])
+  @@index([householdId, deletedAt, transactionAt])
+  @@index([householdId, category, transactionAt])
+  @@index([householdId, merchant])
+  @@index([householdId, accountId, transactionAt])
+  @@index([transferId])
+  @@index([recurringPatternId])
+}
+
+model Budget {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  category    String
+  amount      Decimal   @db.Decimal(14, 2)
+  month       DateTime  @db.Date
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  templateId  String?
+  template    BudgetTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  rolloverAmount Decimal @default(0) @db.Decimal(14, 2)
+
+  @@unique([householdId, category, month])
+  @@index([householdId, month])
+}
+
+model Goal {
+  id            String    @id @default(cuid())
+  householdId   String
+  household     Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name          String
+  targetAmount  Decimal   @db.Decimal(14, 2)
+  currentAmount Decimal   @default(0) @db.Decimal(14, 2)
+  targetDate    DateTime? @db.Date
+  version       Int       @default(0)
+  lastContributionAt DateTime?
+  contributions GoalContribution[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([householdId, targetDate])
+}
+
+model Account {
+  id          String      @id @default(cuid())
+  householdId String
+  household   Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name        String
+  institution String?
+  type        AccountType
+  balance     Decimal     @db.Decimal(14, 2)
+  openingBalance Decimal  @default(0) @db.Decimal(14, 2)
+  version     Int         @default(0)
+  transactions Transaction[]
+  snapshots   AccountBalanceSnapshot[]
+  transfersFrom TransactionTransfer[] @relation("TransferFromAccount")
+  transfersTo TransactionTransfer[] @relation("TransferToAccount")
+  bankConnections BankConnection[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([householdId, type])
+}
+
+model Liability {
+  id             String        @id @default(cuid())
+  householdId    String
+  household      Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name           String
+  institution    String?
+  type           LiabilityType
+  balance        Decimal       @db.Decimal(14, 2)
+  interestRate   Decimal?      @db.Decimal(7, 4)
+  minimumPayment Decimal?      @db.Decimal(14, 2)
+  dueDay         Int?
+  payments       LiabilityPayment[]
+  reminders      ReminderSchedule[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([householdId, type])
+}
+
+model RecurringObligation {
+  id          String              @id @default(cuid())
+  householdId String
+  household   Household           @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name        String
+  category    String
+  amount      Decimal             @db.Decimal(14, 2)
+  frequency   RecurrenceFrequency
+  nextDueDate DateTime            @db.Date
+  active      Boolean             @default(true)
+  detectedFromPatternId String?
+  detectedFromPattern RecurringPattern? @relation(fields: [detectedFromPatternId], references: [id], onDelete: SetNull)
+  reminders ReminderSchedule[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([householdId, active, nextDueDate])
+}
+
+model TransactionTransfer {
+  id            String      @id @default(cuid())
+  householdId   String
+  household     Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  fromAccountId String
+  fromAccount   Account     @relation("TransferFromAccount", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccountId   String
+  toAccount     Account     @relation("TransferToAccount", fields: [toAccountId], references: [id], onDelete: Restrict)
+  amount        Decimal     @db.Decimal(14, 2)
+  description   String?
+  transferredAt DateTime
+  transactions  Transaction[]
+  createdAt     DateTime    @default(now())
+
+  @@index([householdId, transferredAt])
+}
+
+model AccountBalanceSnapshot {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  balance     Decimal   @db.Decimal(14, 2)
+  recordedAt  DateTime  @default(now())
+
+  @@index([accountId, recordedAt])
+  @@index([householdId, recordedAt])
+}
+
+model NetWorthSnapshot {
+  id               String    @id @default(cuid())
+  householdId      String
+  household        Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  totalAssets      Decimal   @db.Decimal(14, 2)
+  totalLiabilities Decimal   @db.Decimal(14, 2)
+  netWorth         Decimal   @db.Decimal(14, 2)
+  recordedAt       DateTime  @default(now())
+
+  @@index([householdId, recordedAt])
+}
+
+model LiabilityPayment {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  liabilityId String
+  liability   Liability @relation(fields: [liabilityId], references: [id], onDelete: Cascade)
+  amount      Decimal   @db.Decimal(14, 2)
+  principal   Decimal   @db.Decimal(14, 2)
+  interest    Decimal   @db.Decimal(14, 2)
+  paidAt      DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([liabilityId, paidAt])
+  @@index([householdId, paidAt])
+}
+
+model RecurringPattern {
+  id             String                 @id @default(cuid())
+  householdId    String
+  household      Household              @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  merchant       String
+  category       String
+  averageAmount  Decimal                @db.Decimal(14, 2)
+  frequency      RecurrenceFrequency
+  confidence     Decimal                @db.Decimal(5, 4)
+  status         RecurringPatternStatus @default(DETECTED)
+  lastDetectedAt DateTime               @default(now())
+  transactions   Transaction[]
+  obligations    RecurringObligation[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  @@unique([householdId, merchant, category, frequency])
+  @@index([householdId, status, lastDetectedAt])
+}
+
+model ReminderSchedule {
+  id               String             @id @default(cuid())
+  householdId      String
+  household        Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  entityType       ReminderEntityType
+  liabilityId      String?
+  liability        Liability?         @relation(fields: [liabilityId], references: [id], onDelete: Cascade)
+  obligationId     String?
+  obligation       RecurringObligation? @relation(fields: [obligationId], references: [id], onDelete: Cascade)
+  subscriptionId   String?
+  subscription     Subscription?       @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  daysBeforeDue    Int                @default(3)
+  active           Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([householdId, active])
+}
+
+model BudgetTemplate {
+  id          String           @id @default(cuid())
+  householdId String
+  household   Household        @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  category    String
+  amount      Decimal          @db.Decimal(14, 2)
+  recurrence  BudgetRecurrence @default(MONTHLY)
+  startMonth  DateTime         @db.Date
+  rollover    Boolean          @default(false)
+  active      Boolean          @default(true)
+  budgets     Budget[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([householdId, active, startMonth])
+}
+
+model GoalContribution {
+  id          String                 @id @default(cuid())
+  householdId String
+  household   Household              @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  goalId      String
+  goal        Goal                   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  amount      Decimal                @db.Decimal(14, 2)
+  source      GoalContributionSource @default(MANUAL)
+  contributedAt DateTime             @default(now())
+  createdAt   DateTime               @default(now())
+
+  @@index([goalId, contributedAt])
+  @@index([householdId, contributedAt])
+}
+
+model BankConnection {
+  id                String               @id @default(cuid())
+  householdId       String
+  household         Household            @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  accountId         String?
+  account           Account?             @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  provider          String
+  externalAccountId String
+  displayName       String
+  status            BankConnectionStatus @default(PENDING)
+  cursor            String?
+  lastSyncAt        DateTime?
+  errorMessage      String?
+  syncLogs          BankSyncLog[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@unique([householdId, provider, externalAccountId])
+  @@index([householdId, status])
+}
+
+model BankSyncLog {
+  id               String         @id @default(cuid())
+  householdId      String
+  household        Household      @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  bankConnectionId String
+  bankConnection   BankConnection @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
+  transactionCount Int            @default(0)
+  status           BankConnectionStatus
+  errorMessage     String?
+  syncedAt         DateTime       @default(now())
+
+  @@index([bankConnectionId, syncedAt])
+  @@index([householdId, syncedAt])
+}
+
+model Subscription {
+  id          String             @id @default(cuid())
+  householdId String
+  household   Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name        String
+  vendor      String
+  category    String
+  amount      Decimal            @db.Decimal(14, 2)
+  frequency   RecurrenceFrequency
+  startDate   DateTime           @db.Date
+  renewalDate DateTime           @db.Date
+  endDate     DateTime?          @db.Date
+  status      SubscriptionStatus @default(ACTIVE)
+  events      SubscriptionEvent[]
+  reminders   ReminderSchedule[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([householdId, status, renewalDate])
+}
+
+model SubscriptionEvent {
+  id             String             @id @default(cuid())
+  householdId    String
+  household      Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  subscriptionId String
+  subscription   Subscription       @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  action         SubscriptionAction
+  reason         String?
+  occurredAt     DateTime           @default(now())
+
+  @@index([subscriptionId, occurredAt])
+  @@index([householdId, occurredAt])
+}
+
+model OwnershipTransferRequest {
+  id          String                  @id @default(cuid())
+  householdId String
+  household   Household               @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  fromUserId  String
+  fromUser    User                    @relation("OwnershipTransferFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId    String
+  toUser      User                    @relation("OwnershipTransferTo", fields: [toUserId], references: [id], onDelete: Cascade)
+  status      OwnershipTransferStatus @default(PENDING)
+  expiresAt   DateTime
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@index([householdId, status])
+  @@index([toUserId, status])
+}
+
+model AccountDeletionRequest {
+  id          String                @id @default(cuid())
+  householdId String
+  household   Household             @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      DeletionRequestStatus @default(PENDING)
+  executeAfter DateTime
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([userId, status])
+  @@index([householdId, status])
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  householdId String
+  household   Household   @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?       @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action      AuditAction
+  entityType  String
+  entityId    String
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+
+  @@index([householdId, createdAt])
+  @@index([entityType, entityId])
+}
