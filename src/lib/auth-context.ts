@@ -10,6 +10,9 @@ const developmentSubject = "development:northstar-demo-user";
 export const activeHouseholdCookie = "fintrack-household";
 const writerRoles = new Set(["OWNER", "ADMIN", "MEMBER"]);
 const adminRoles = new Set(["OWNER", "ADMIN"]);
+const globalForDevelopmentAuth = globalThis as unknown as {
+  developmentUserIdPromise?: Promise<string>;
+};
 
 type AccessLevel = "read" | "write" | "admin" | "owner";
 
@@ -56,7 +59,7 @@ function toHouseholdContext(membership: NonNullable<Awaited<ReturnType<typeof fi
   };
 }
 
-async function getDevelopmentContext(): Promise<HouseholdContext> {
+async function bootstrapDevelopmentUser() {
   const user = await getDb().$transaction(async (db) => {
     const user = await db.user.upsert({
       where: { email: "alex@northstar.local" },
@@ -78,8 +81,17 @@ async function getDevelopmentContext(): Promise<HouseholdContext> {
       create: { userId: user.id, householdId: demoHouseholdId, role: "OWNER" },
     });
     return user;
+  }, { maxWait: 10_000, timeout: 15_000 });
+  return user.id;
+}
+
+async function getDevelopmentContext(): Promise<HouseholdContext> {
+  globalForDevelopmentAuth.developmentUserIdPromise ??= bootstrapDevelopmentUser().catch((error) => {
+    delete globalForDevelopmentAuth.developmentUserIdPromise;
+    throw error;
   });
-  const membership = await findActiveMembership(user.id);
+  const userId = await globalForDevelopmentAuth.developmentUserIdPromise;
+  const membership = await findActiveMembership(userId);
   if (!membership) throw new ApiResponseError("Development household is unavailable.", 503);
   return toHouseholdContext(membership);
 }

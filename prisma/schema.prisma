@@ -405,7 +405,7 @@ model NetWorthSnapshot {
   netWorth         Decimal   @db.Decimal(14, 2)
   recordedAt       DateTime  @default(now())
 
-  @@index([householdId, recordedAt])
+  @@unique([householdId, recordedAt])
 }
 
 model LiabilityPayment {

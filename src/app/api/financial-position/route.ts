@@ -29,6 +29,7 @@ export async function GET() {
       balance: liability.balance.toNumber(),
       interestRate: liability.interestRate?.toNumber() ?? null,
       minimumPayment: liability.minimumPayment?.toNumber() ?? null,
+      dueDay: liability.dueDay,
       type: liability.type.toLowerCase(),
       payoff: liability.minimumPayment ? calculatePayoff(liability.balance.toNumber(), liability.interestRate?.toNumber() ?? 0, liability.minimumPayment.toNumber(), liability.dueDay ?? 1) : null,
       payments: liability.payments.map((payment) => ({

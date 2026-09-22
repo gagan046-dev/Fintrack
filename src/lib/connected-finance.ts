@@ -56,8 +56,16 @@ export async function captureNetWorthSnapshot(db: Prisma.TransactionClient, hous
   ]);
   const totalAssets = assets._sum.balance?.toNumber() ?? 0;
   const totalLiabilities = debts._sum.balance?.toNumber() ?? 0;
-  return db.netWorthSnapshot.create({
-    data: { householdId, totalAssets: totalAssets.toFixed(2), totalLiabilities: totalLiabilities.toFixed(2), netWorth: (totalAssets - totalLiabilities).toFixed(2), recordedAt },
+  const snapshotDate = new Date(Date.UTC(recordedAt.getUTCFullYear(), recordedAt.getUTCMonth(), recordedAt.getUTCDate()));
+  const values = {
+    totalAssets: totalAssets.toFixed(2),
+    totalLiabilities: totalLiabilities.toFixed(2),
+    netWorth: (totalAssets - totalLiabilities).toFixed(2),
+  };
+  return db.netWorthSnapshot.upsert({
+    where: { householdId_recordedAt: { householdId, recordedAt: snapshotDate } },
+    update: values,
+    create: { householdId, recordedAt: snapshotDate, ...values },
   });
 }
 
