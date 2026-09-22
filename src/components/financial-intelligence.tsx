@@ -108,7 +108,8 @@ export function FinancialPositionWorkspace() {
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const data = kind === "account" ? {
       name: form.get("name"), institution: form.get("institution") || null, type: form.get("type"), balance: form.get("balance"),
     } : kind === "liability" ? {
@@ -124,7 +125,7 @@ export function FinancialPositionWorkspace() {
       body: JSON.stringify(editing ? data : { kind, data }),
     });
     if (!response.ok) return setNotice(await responseMessage(response, "Financial record could not be saved."));
-    event.currentTarget.reset();
+    formElement.reset();
     setEditing(null);
     setNotice("Financial position updated.");
     await load();
@@ -136,7 +137,7 @@ export function FinancialPositionWorkspace() {
     await load();
   }
 
-  async function recordPayment(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=new FormData(event.currentTarget);const id=String(form.get("liabilityId"));const response=await fetch(`/api/liabilities/${id}/payments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:form.get("amount"),paidAt:form.get("paidAt")})});if(!response.ok)return setNotice(await responseMessage(response,"EMI payment could not be recorded."));event.currentTarget.reset();await load();setNotice("EMI payment recorded.")}
+  async function recordPayment(event:FormEvent<HTMLFormElement>){event.preventDefault();const formElement=event.currentTarget;const form=new FormData(formElement);const id=String(form.get("liabilityId"));const response=await fetch(`/api/liabilities/${id}/payments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:form.get("amount"),paidAt:form.get("paidAt")})});if(!response.ok)return setNotice(await responseMessage(response,"EMI payment could not be recorded."));formElement.reset();await load();setNotice("EMI payment recorded.")}
 
   return <section className="position-workspace">
     {notice && <div className="inline-notice"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15} /></button></div>}

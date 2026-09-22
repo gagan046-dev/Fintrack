@@ -104,7 +104,8 @@ export function HouseholdWorkspace() {
 
   async function inviteMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const response = await fetch("/api/households/invitations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -113,7 +114,7 @@ export function HouseholdWorkspace() {
     if (!response.ok) return setNotice(await apiMessage(response, "Invitation could not be created."));
     const result = await response.json() as { data: { invitePath: string } };
     setInviteLink(`${window.location.origin}${result.data.invitePath}`);
-    event.currentTarget.reset();
+    formElement.reset();
     setNotice("Invitation created. Share the secure link with the recipient.");
     await load();
   }

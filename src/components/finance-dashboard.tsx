@@ -1170,6 +1170,10 @@ export function FinanceDashboard({
         const response = await fetch("/api/transactions", {
           cache: "no-store",
         });
+        if (response.status === 401) {
+          window.location.replace("/sign-in");
+          return;
+        }
         if (!response.ok) throw new Error("Database unavailable");
         const result = (await response.json()) as { data: Transaction[] };
         let synced = result.data;

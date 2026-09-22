@@ -147,6 +147,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .notification-empty > span { width: 42px; height: 42px; border-radius: 50%; background: #e5f4ef; color: var(--green); display: grid; place-items: center; }
 .notification-empty p { max-width: 245px; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 @media (max-width: 760px) { .notification-panel { inset: 62px 8px auto; width: auto; max-height: calc(100vh - 70px); border-radius: 0 0 8px 8px; }.notification-item { min-height: 98px; } }
+.transaction-form-error { margin-top: 12px; padding: 9px 10px; border: 1px solid #efc5cc; border-radius: 6px; background: #fff3f5; color: #9f2940; font-size: 10px; line-height: 1.45; }
+.transaction-modal .primary-button:disabled { opacity: .6; cursor: wait; }
 
 /* Desktop financial workspace */
 .sidebar { width: 248px; padding: 24px 16px 18px; background: #111c33; color: #f7f8fb; }

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowDownLeft, ArrowUpRight, X } from "lucide-react";
-import { FormEvent } from "react";
+import { FormEvent, useState } from "react";
 import { useCurrencyFormatter } from "@/components/currency-context";
 
 type TransactionDraft = {
@@ -30,9 +30,13 @@ export function TransactionEditor({
   onSaved: (transaction: TransactionDraft) => void;
 }) {
   const { currencySymbol } = useCurrencyFormatter();
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError("");
+    setSaving(true);
     const form = new FormData(event.currentTarget);
     const body = {
       description: String(form.get("description")),
@@ -46,15 +50,29 @@ export function TransactionEditor({
       source: "manual",
     };
     const editing = typeof transaction?.id === "string";
-    const response = await fetch(editing ? `/api/transactions/${transaction.id}` : "/api/transactions", {
-      method: editing ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...body, ...(editing ? {} : { externalId: `manual:${crypto.randomUUID()}` }) }),
-    });
-    if (!response.ok) return;
-    const result = await response.json() as { data: TransactionDraft };
-    onSaved(result.data);
-    onClose();
+    try {
+      const response = await fetch(editing ? `/api/transactions/${transaction.id}` : "/api/transactions", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, ...(editing ? {} : { externalId: `manual:${crypto.randomUUID()}` }) }),
+      });
+      if (response.status === 401) {
+        window.location.replace("/sign-in");
+        return;
+      }
+      if (!response.ok) {
+        const result = await response.json().catch(() => null) as { error?: string } | null;
+        setError(result?.error ?? "Transaction could not be saved.");
+        return;
+      }
+      const result = await response.json() as { data: TransactionDraft };
+      onSaved(result.data);
+      onClose();
+    } catch {
+      setError("Transaction could not be saved. Check your connection and try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -84,7 +102,8 @@ export function TransactionEditor({
             <label className="form-field"><span>Account</span><select name="accountId" defaultValue={transaction?.accountId ?? ""}><option value="">Unassigned</option>{accounts.map((account) => <option value={account.id} key={account.id}>{account.name}</option>)}</select></label>
           </div>
           <label className="form-field"><span>Date</span><input name="date" type="date" defaultValue={transaction?.date ?? new Date().toISOString().slice(0, 10)} required /></label>
-          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button">{transaction ? "Update" : "Save"} transaction</button></div>
+          {error && <div className="transaction-form-error" role="alert">{error}</div>}
+          <div className="modal-actions"><button type="button" className="secondary-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={saving}>{saving ? "Saving..." : `${transaction ? "Update" : "Save"} transaction`}</button></div>
         </form>
       </section>
     </div>
