@@ -18,7 +18,13 @@ function createPrismaClient() {
     max: 5,
   });
 
-  return new PrismaClient({ adapter });
+  return new PrismaClient({
+    adapter,
+    transactionOptions: {
+      maxWait: 10_000,
+      timeout: 20_000,
+    },
+  });
 }
 
 export function getDb() {

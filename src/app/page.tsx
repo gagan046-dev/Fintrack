@@ -15,5 +15,5 @@ export default async function Home() {
     throw error;
   }
 
-  return <CurrencyProvider currency={context.currency}><FinanceDashboard authenticationEnabled={isClerkConfigured()} userName={context.userName} /></CurrencyProvider>;
+  return <CurrencyProvider currency={context.currency}><FinanceDashboard authenticationEnabled={isClerkConfigured()} userName={context.userName} todayIso={new Date().toISOString()} /></CurrencyProvider>;
 }

@@ -241,7 +241,7 @@ function formatTransactionDate(value: string) {
 const workspaceNavItems = [
   { label: "Overview", target: "Overview", icon: Grid2X2 },
   { label: "Transactions", target: "Transactions", icon: ReceiptText },
-  { label: "Accounts", target: "Position", icon: Landmark },
+  { label: "Financial position", target: "Position", icon: Landmark },
   { label: "Operations", target: "Operations", icon: SlidersHorizontal },
 ];
 
@@ -1117,16 +1117,19 @@ function GoalWorkspace({
 export function FinanceDashboard({
   authenticationEnabled = false,
   userName = "Alex Rivera",
+  todayIso,
 }: {
   authenticationEnabled?: boolean;
   userName?: string;
+  todayIso: string;
 }) {
   const { currency } = useCurrencyFormatter();
-  const today = new Date();
+  const today = new Date(todayIso);
   const todayLabel = today.toLocaleDateString("en-IN", {
     weekday: "long",
     month: "long",
     day: "numeric",
+    timeZone: "Asia/Kolkata",
   });
   const [activeNav, setActiveNav] = useState("Overview");
   const transactions = useSyncExternalStore(
@@ -1781,12 +1784,14 @@ export function FinanceDashboard({
                 {activeNav === "Overview"
                   ? `Good morning, ${userName.split(" ")[0]}.`
                   : activeNav === "Position"
-                    ? "Accounts"
+                    ? "Financial position"
                     : activeNav}
               </h1>
               <p>
                 {activeNav === "Overview"
                   ? "Here’s your financial snapshot for today."
+                  : activeNav === "Position"
+                    ? "Manage your assets, debts, and recurring bills."
                   : `Review and manage your ${activeNav.toLowerCase()}.`}
               </p>
             </div>
@@ -1923,8 +1928,10 @@ export function FinanceDashboard({
               onUpdate={updateGoal}
               onDelete={deleteGoal}
             />
-          ) : activeNav === "Position" || activeNav === "EMI" ? (
+          ) : activeNav === "Position" ? (
             <FinancialPositionWorkspace />
+          ) : activeNav === "EMI" ? (
+            <FinancialPositionWorkspace view="emi" />
           ) : activeNav === "Operations" ? (
             <OperationsWorkspace />
           ) : activeNav === "Household" ? (

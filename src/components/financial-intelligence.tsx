@@ -32,7 +32,7 @@ async function responseMessage(response: Response, fallback: string) {
   }
 }
 
-export function FinancialPositionWorkspace() {
+export function FinancialPositionWorkspace({ view = "position" }: { view?: "position" | "emi" }) {
   const { currency, currencySymbol } = useCurrencyFormatter();
   const [position, setPosition] = useState<FinancialPosition | null>(null);
   const [kind, setKind] = useState<PositionKind>("account");
@@ -43,28 +43,43 @@ export function FinancialPositionWorkspace() {
   const formRef = useRef<HTMLFormElement>(null);
 
   async function load() {
-    const [response, historyResponse] = await Promise.all([
-      fetch("/api/financial-position", { cache: "no-store" }),
-      fetch("/api/financial-position/history", { cache: "no-store" }),
-    ]);
-    if (!response.ok) throw new Error(await responseMessage(response, "Financial position could not be loaded."));
-    if (!historyResponse.ok) throw new Error(await responseMessage(historyResponse, "Net-worth history could not be loaded."));
-    const [result, historyResult] = await Promise.all([
-      response.json() as Promise<{ data: FinancialPosition }>,
-      historyResponse.json() as Promise<{ data: HistoryPoint[] }>,
-    ]);
-    setPosition(result.data);
-    setHistory(historyResult.data);
+    try {
+      const [response, historyResponse] = await Promise.all([
+        fetch("/api/financial-position", { cache: "no-store" }),
+        fetch("/api/financial-position/history", { cache: "no-store" }),
+      ]);
+      if (response.status === 401 || historyResponse.status === 401) {
+        window.location.replace("/sign-in");
+        return false;
+      }
+      if (!response.ok) throw new Error(await responseMessage(response, "Financial position could not be loaded."));
+      if (!historyResponse.ok) throw new Error(await responseMessage(historyResponse, "Net-worth history could not be loaded."));
+      const [result, historyResult] = await Promise.all([
+        response.json() as Promise<{ data: FinancialPosition }>,
+        historyResponse.json() as Promise<{ data: HistoryPoint[] }>,
+      ]);
+      setPosition(result.data);
+      setHistory(historyResult.data);
+      return true;
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Financial position could not be loaded.");
+      return false;
+    }
   }
 
   useEffect(() => {
     let active = true;
     void Promise.all([fetch("/api/financial-position", { cache: "no-store" }),fetch("/api/financial-position/history",{cache:"no-store"})])
       .then(async ([response,historyResponse]) => {
+        if (response.status === 401 || historyResponse.status === 401) {
+          window.location.replace("/sign-in");
+          return null;
+        }
         if (!response.ok) throw new Error(await responseMessage(response, "Financial position could not be loaded."));
-        return {position:await response.json() as {data:FinancialPosition},history:historyResponse.ok?await historyResponse.json() as {data:HistoryPoint[]}:{data:[]}};
+        if (!historyResponse.ok) throw new Error(await responseMessage(historyResponse, "Net-worth history could not be loaded."));
+        return {position:await response.json() as {data:FinancialPosition},history:await historyResponse.json() as {data:HistoryPoint[]}};
       })
-      .then((result) => { if (active){setPosition(result.position.data);setHistory(result.history.data)} })
+      .then((result) => { if (active && result){setPosition(result.position.data);setHistory(result.history.data)} })
       .catch((error: Error) => { if (active) setNotice(error.message); });
     return () => { active = false; };
   }, []);
@@ -127,8 +142,7 @@ export function FinancialPositionWorkspace() {
     if (!response.ok) return setNotice(await responseMessage(response, "Financial record could not be saved."));
     formElement.reset();
     setEditing(null);
-    setNotice("Financial position updated.");
-    await load();
+    if (await load()) setNotice("Financial position updated.");
   }
 
   async function remove(kindToDelete: PositionKind, id: string) {
@@ -137,7 +151,11 @@ export function FinancialPositionWorkspace() {
     await load();
   }
 
-  async function recordPayment(event:FormEvent<HTMLFormElement>){event.preventDefault();const formElement=event.currentTarget;const form=new FormData(formElement);const id=String(form.get("liabilityId"));const response=await fetch(`/api/liabilities/${id}/payments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:form.get("amount"),paidAt:form.get("paidAt")})});if(!response.ok)return setNotice(await responseMessage(response,"EMI payment could not be recorded."));formElement.reset();await load();setNotice("EMI payment recorded.")}
+  async function recordPayment(event:FormEvent<HTMLFormElement>){event.preventDefault();const formElement=event.currentTarget;const form=new FormData(formElement);const id=String(form.get("liabilityId"));const response=await fetch(`/api/liabilities/${id}/payments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:form.get("amount"),paidAt:form.get("paidAt")})});if(!response.ok)return setNotice(await responseMessage(response,"EMI payment could not be recorded."));formElement.reset();if(await load())setNotice("EMI payment recorded.")}
+
+  if (view === "emi") {
+    return <section className="position-workspace">{notice && <div className="inline-notice"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15} /></button></div>}<EmiWorkspace liabilities={position?.liabilities ?? []} selectedId={selectedEmiId} onSelect={setSelectedEmiId} onRecordPayment={recordPayment} currency={currency} currencySymbol={currencySymbol} /></section>;
+  }
 
   return <section className="position-workspace">
     {notice && <div className="inline-notice"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15} /></button></div>}
@@ -149,7 +167,7 @@ export function FinancialPositionWorkspace() {
     </div>
     <section className="workspace-panel net-worth-history"><div className="section-header"><div><h2>Net-worth history</h2><p>One closing position per day, updated when balances, liabilities, or linked transactions change.</p></div></div><div className="position-chart"><ResponsiveContainer width="100%" height="100%"><AreaChart data={history.map(item=>({...item,date:new Date(item.date).toLocaleDateString(undefined,{month:"short",day:"numeric"})}))} margin={{top:8,right:16,left:8,bottom:4}}><CartesianGrid vertical={false} stroke="#dce2ea"/><XAxis dataKey="date" axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={24}/><YAxis axisLine={false} tickLine={false}/><Tooltip/><Area dataKey="netWorth" stroke="#2f6fec" fill="#2f6fec" fillOpacity={.15}/></AreaChart></ResponsiveContainer></div></section>
     <form className="position-form" ref={formRef} onSubmit={save}>
-      <div className="position-form-head"><div className="type-toggle position-tabs">{(["account", "liability", "recurring"] as PositionKind[]).map((item) => <button className={kind === item ? "active" : ""} type="button" key={item} onClick={() => { setKind(item); setEditing(null); formRef.current?.reset(); }}>{item === "recurring" ? "Recurring" : `${item[0].toUpperCase()}${item.slice(1)}`}</button>)}</div>{editing && <button className="text-button" type="button" onClick={() => { setEditing(null); formRef.current?.reset(); }}><X size={14} /> Cancel edit</button>}</div>
+      <div className="position-form-head"><div className="type-toggle position-tabs">{(["account", "liability", "recurring"] as PositionKind[]).map((item) => <button className={kind === item ? "active" : ""} type="button" key={item} onClick={() => { setKind(item); setEditing(null); formRef.current?.reset(); }}>{item === "account" ? "Assets" : item === "liability" ? "Debts & loans" : "Recurring bills"}</button>)}</div>{editing && <button className="text-button" type="button" onClick={() => { setEditing(null); formRef.current?.reset(); }}><X size={14} /> Cancel edit</button>}</div>
       <div className="position-fields">
         <label><span>Name</span><input name="name" placeholder={kind === "account" ? "Main checking" : kind === "liability" ? "Credit card" : "Monthly rent"} required /></label>
         {kind !== "recurring" && <label><span>Institution</span><input name="institution" placeholder="Optional" /></label>}
@@ -159,7 +177,6 @@ export function FinancialPositionWorkspace() {
         <button className="primary-button" type="submit">{editing ? <Pencil size={16} /> : <Plus size={16} />}{editing ? "Save changes" : "Add record"}</button>
       </div>
     </form>
-    <EmiWorkspace liabilities={position?.liabilities ?? []} selectedId={selectedEmiId} onSelect={setSelectedEmiId} onRecordPayment={recordPayment} currency={currency} currencySymbol={currencySymbol} />
     <div className="position-lists">
       <PositionList title="Accounts" empty="No balances tracked" items={position?.accounts ?? []} kind="account" onEdit={beginEdit} onDelete={remove} detail={(item) => `${item.type.replace("_", " ")} · ${currency.format(item.balance)}`} />
       <PositionList title="Liabilities" empty="No liabilities tracked" items={position?.liabilities ?? []} kind="liability" onEdit={beginEdit} onDelete={remove} detail={(item) => `${item.type.replace("_", " ")} · ${currency.format(item.balance)} remaining${item.minimumPayment ? ` · ${currency.format(item.minimumPayment)} EMI` : ""}`} />
