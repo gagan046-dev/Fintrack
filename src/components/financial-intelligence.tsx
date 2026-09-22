@@ -40,6 +40,7 @@ export function FinancialPositionWorkspace({ view = "position" }: { view?: "posi
   const [notice, setNotice] = useState("");
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [selectedEmiId, setSelectedEmiId] = useState("");
+  const [showEmiForm, setShowEmiForm] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   async function load() {
@@ -125,9 +126,10 @@ export function FinancialPositionWorkspace({ view = "position" }: { view?: "posi
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const data = kind === "account" ? {
+    const effectiveKind: PositionKind = view === "emi" ? "liability" : kind;
+    const data = effectiveKind === "account" ? {
       name: form.get("name"), institution: form.get("institution") || null, type: form.get("type"), balance: form.get("balance"),
-    } : kind === "liability" ? {
+    } : effectiveKind === "liability" ? {
       name: form.get("name"), institution: form.get("institution") || null, type: form.get("type"), balance: form.get("balance"),
       interestRate: form.get("interestRate") || null, minimumPayment: form.get("minimumPayment") || null, dueDay: form.get("dueDay") || null,
     } : {
@@ -137,12 +139,15 @@ export function FinancialPositionWorkspace({ view = "position" }: { view?: "posi
     const response = await fetch(editing ? `/api/financial-position/${editing.kind}/${editing.id}` : "/api/financial-position", {
       method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editing ? data : { kind, data }),
+      body: JSON.stringify(editing ? data : { kind: effectiveKind, data }),
     });
     if (!response.ok) return setNotice(await responseMessage(response, "Financial record could not be saved."));
     formElement.reset();
     setEditing(null);
-    if (await load()) setNotice("Financial position updated.");
+    if (await load()) {
+      setShowEmiForm(false);
+      setNotice(view === "emi" ? "Loan added to your EMI planner." : "Financial position updated.");
+    }
   }
 
   async function remove(kindToDelete: PositionKind, id: string) {
@@ -154,7 +159,24 @@ export function FinancialPositionWorkspace({ view = "position" }: { view?: "posi
   async function recordPayment(event:FormEvent<HTMLFormElement>){event.preventDefault();const formElement=event.currentTarget;const form=new FormData(formElement);const id=String(form.get("liabilityId"));const response=await fetch(`/api/liabilities/${id}/payments`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount:form.get("amount"),paidAt:form.get("paidAt")})});if(!response.ok)return setNotice(await responseMessage(response,"EMI payment could not be recorded."));formElement.reset();if(await load())setNotice("EMI payment recorded.")}
 
   if (view === "emi") {
-    return <section className="position-workspace">{notice && <div className="inline-notice"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15} /></button></div>}<EmiWorkspace liabilities={position?.liabilities ?? []} selectedId={selectedEmiId} onSelect={setSelectedEmiId} onRecordPayment={recordPayment} currency={currency} currencySymbol={currencySymbol} /></section>;
+    return <section className="position-workspace">
+      {notice && <div className="inline-notice"><span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss"><X size={15} /></button></div>}
+      <div className="workspace-command-row"><button className="primary-button" type="button" onClick={() => setShowEmiForm((current) => !current)}>{showEmiForm ? <X size={16} /> : <Plus size={16} />}{showEmiForm ? "Cancel" : "Add loan / EMI"}</button></div>
+      {showEmiForm && <form className="position-form emi-setup-form" ref={formRef} onSubmit={save}>
+        <div className="section-header"><div><h2>Add loan or mortgage</h2><p>Enter the outstanding balance and monthly installment. Only the installment is treated as a monthly obligation.</p></div></div>
+        <div className="position-fields">
+          <label><span>Name</span><input name="name" placeholder="Home loan" required /></label>
+          <label><span>Institution</span><input name="institution" placeholder="Bank or lender" /></label>
+          <label><span>Type</span><select name="type" defaultValue="loan"><option value="loan">Loan / EMI</option><option value="mortgage">Mortgage / home loan</option></select></label>
+          <MoneyInput name="balance" label="Remaining balance" symbol={currencySymbol} />
+          <label><span>Annual interest %</span><input name="interestRate" type="number" min="0" max="100" step="0.01" required /></label>
+          <MoneyInput name="minimumPayment" label="Monthly EMI" symbol={currencySymbol} />
+          <label><span>Payment due day</span><input name="dueDay" type="number" min="1" max="31" required /></label>
+          <button className="primary-button" type="submit"><Plus size={16} /> Add to EMI planner</button>
+        </div>
+      </form>}
+      {position ? <EmiWorkspace liabilities={position.liabilities} selectedId={selectedEmiId} onSelect={setSelectedEmiId} onRecordPayment={recordPayment} currency={currency} currencySymbol={currencySymbol} /> : <div className="empty-ledger"><strong>Loading EMI plans</strong></div>}
+    </section>;
   }
 
   return <section className="position-workspace">

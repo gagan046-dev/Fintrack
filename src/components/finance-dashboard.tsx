@@ -1164,6 +1164,7 @@ export function FinanceDashboard({
   const [goals, setGoals] = useState<SavingsGoal[]>([]);
   const [goalLoading, setGoalLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const userInitials = userName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 
   useEffect(() => {
     let active = true;
@@ -1691,15 +1692,23 @@ export function FinanceDashboard({
               setIsMenuOpen(false);
             }}
           >
+            <Settings size={18} />
+            <span>Settings</span>
+          </button>
+          <button
+            className={
+              activeNav === "Security" ? "nav-item active" : "nav-item"
+            }
+            onClick={() => {
+              setActiveNav("Security");
+              setIsMenuOpen(false);
+            }}
+          >
             <UserRound size={18} />
-            <span>Account</span>
+            <span>Profile &amp; security</span>
           </button>
           <div className="profile-block">
-            {authenticationEnabled ? (
-              <UserButton />
-            ) : (
-              <div className="avatar">AR</div>
-            )}
+            <div className="profile-avatar"><span>{userInitials}</span>{authenticationEnabled && <UserButton />}</div>
             <div>
               <strong>{userName}</strong>
               <span>Personal plan</span>
@@ -1769,7 +1778,8 @@ export function FinanceDashboard({
               <Settings size={18} />
             </button>
             <div className="topbar-profile" aria-label={`Signed in as ${userName}`}>
-              {authenticationEnabled ? <UserButton /> : <span>{userName.slice(0, 2).toUpperCase()}</span>}
+              <span>{userInitials}</span>
+              {authenticationEnabled && <UserButton />}
             </div>
           </div>
           {notificationsOpen && (
