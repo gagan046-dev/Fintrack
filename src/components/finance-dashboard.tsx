@@ -2010,12 +2010,12 @@ export function FinanceDashboard({
                           dataKey="month"
                           axisLine={false}
                           tickLine={false}
-                          tick={{ fill: "#667085", fontSize: 12 }}
+                          tick={{ fill: "#667085" }}
                         />
                         <YAxis
                           axisLine={false}
                           tickLine={false}
-                          tick={{ fill: "#667085", fontSize: 12 }}
+                          tick={{ fill: "#667085" }}
                           tickFormatter={(value) =>
                             currency.format(Number(value))
                           }

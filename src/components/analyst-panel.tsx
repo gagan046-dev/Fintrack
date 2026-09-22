@@ -256,7 +256,7 @@ function SafeChart({ spec }: { spec: AnalysisChartSpec }) {
     const normalized = Array.isArray(value) ? value[0] : value;
     return first.format === "currency" ? chartCurrency.format(Number(normalized ?? 0)) : String(normalized ?? 0);
   };
-  const axes = <><CartesianGrid vertical={false} stroke="#dce2ea" /><XAxis dataKey="x" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} interval="preserveStartEnd" /><YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} width={62} tickFormatter={(value) => first.format === "currency" ? chartCurrency.format(Number(value)) : String(value)} /><Tooltip formatter={tooltipFormatter} /></>;
+  const axes = <><CartesianGrid vertical={false} stroke="#dce2ea" /><XAxis dataKey="x" axisLine={false} tickLine={false} interval="preserveStartEnd" /><YAxis axisLine={false} tickLine={false} width={62} tickFormatter={(value) => first.format === "currency" ? chartCurrency.format(Number(value)) : String(value)} /><Tooltip formatter={tooltipFormatter} /></>;
 
   function exportCsv() {
     const headers = ["Label", ...spec.series.map((item) => item.label)];

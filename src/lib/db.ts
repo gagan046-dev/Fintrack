@@ -15,6 +15,7 @@ function createPrismaClient() {
   const adapter = new PrismaPg({
     connectionString,
     connectionTimeoutMillis: 5000,
+    max: 5,
   });
 
   return new PrismaClient({ adapter });
@@ -22,10 +23,6 @@ function createPrismaClient() {
 
 export function getDb() {
   const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.prisma = prisma;
-  }
-
+  globalForPrisma.prisma = prisma;
   return prisma;
 }

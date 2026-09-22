@@ -1,7 +1,7 @@
 "use client";
 
 import { UserProfile } from "@clerk/nextjs";
-import { Check, Copy, Mail, Plus, RefreshCw, RotateCcw, ShieldCheck, Trash2, UserPlus, Users, X } from "lucide-react";
+import { Bell, Check, CheckCheck, Copy, Mail, Plus, RefreshCw, RotateCcw, ShieldCheck, Trash2, UserPlus, Users, X } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { useCurrencyFormatter } from "@/components/currency-context";
 
@@ -197,13 +197,21 @@ export function SecurityWorkspace({ authenticationEnabled }: { authenticationEna
 export function NotificationPanel({ onClose }: { onClose: () => void }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  const unreadCount = notifications.filter((notification) => !notification.readAt).length;
+
+  function notificationTime(createdAt: string) {
+    return new Date(createdAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
 
   async function load() {
+    setError("");
     const response = await fetch("/api/notifications", { cache: "no-store" });
-    if (response.ok) {
-      const result = await response.json() as { data: AppNotification[] };
-      setNotifications(result.data);
-    }
+    if (!response.ok) throw new Error(await apiMessage(response, "Notifications could not be loaded."));
+    const result = await response.json() as { data: AppNotification[] };
+    setNotifications(result.data);
     setLoading(false);
   }
 
@@ -217,7 +225,9 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
       .then((result: { data: AppNotification[] }) => {
         if (active) setNotifications(result.data);
       })
-      .catch(() => {})
+      .catch((loadError: Error) => {
+        if (active) setError(loadError.message);
+      })
       .finally(() => {
         if (active) setLoading(false);
       });
@@ -225,16 +235,61 @@ export function NotificationPanel({ onClose }: { onClose: () => void }) {
   }, []);
 
   async function markAllRead() {
-    await fetch("/api/notifications/read-all", { method: "POST" });
-    await load();
+    if (!unreadCount) return;
+    setBusyAction("all");
+    setError("");
+    try {
+      const response = await fetch("/api/notifications/read-all", { method: "POST" });
+      if (!response.ok) throw new Error(await apiMessage(response, "Notifications could not be updated."));
+      const readAt = new Date().toISOString();
+      setNotifications((current) => current.map((notification) => ({ ...notification, readAt: notification.readAt ?? readAt })));
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "Notifications could not be updated.");
+    } finally {
+      setBusyAction(null);
+    }
   }
 
   async function remove(id: string) {
-    await fetch(`/api/notifications/${id}`, { method: "DELETE" });
-    setNotifications((current) => current.filter((notification) => notification.id !== id));
+    setBusyAction(id);
+    setError("");
+    try {
+      const response = await fetch(`/api/notifications/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error(await apiMessage(response, "Notification could not be removed."));
+      setNotifications((current) => current.filter((notification) => notification.id !== id));
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "Notification could not be removed.");
+    } finally {
+      setBusyAction(null);
+    }
   }
 
-  return <aside className="notification-panel" aria-label="Notifications"><div className="notification-header"><div><strong>Notifications</strong><span>{notifications.filter((item) => !item.readAt).length} unread</span></div><button className="icon-button" onClick={onClose} aria-label="Close notifications"><X size={18} /></button></div><div className="notification-actions"><button onClick={() => void markAllRead()}>Mark all read</button></div><div className="notification-list">{loading ? <span>Loading updates</span> : notifications.length ? notifications.map((notification) => <article className={notification.readAt ? "notification-item" : "notification-item unread"} key={notification.id}><div><strong>{notification.title}</strong><p>{notification.message}</p><span>{new Date(notification.createdAt).toLocaleDateString()}</span></div><button onClick={() => void remove(notification.id)} aria-label={`Delete ${notification.title}`}><Trash2 size={15} /></button></article>) : <div className="notification-empty"><Check size={20} /><strong>You are all caught up</strong></div>}</div></aside>;
+  return (
+    <aside className="notification-panel" aria-label="Notifications">
+      <div className="notification-header">
+        <div className="notification-title"><span className="notification-heading-icon"><Bell size={17} /></span><div><strong>Notifications</strong><span>{unreadCount ? `${unreadCount} unread` : "All caught up"}</span></div></div>
+        <button className="icon-button" onClick={onClose} aria-label="Close notifications"><X size={18} /></button>
+      </div>
+      <div className="notification-actions">
+        <span>Latest activity</span>
+        <button type="button" onClick={() => void markAllRead()} disabled={!unreadCount || busyAction === "all"}><CheckCheck size={14} /> Mark all read</button>
+      </div>
+      {error && <div className="notification-error" role="alert"><span>{error}</span><button type="button" onClick={() => void load()}>Retry</button></div>}
+      <div className="notification-list">
+        {loading ? <div className="notification-loading" role="status"><span /><span /><span /></div> : notifications.length ? notifications.map((notification) => (
+          <article className={notification.readAt ? "notification-item" : "notification-item unread"} key={notification.id}>
+            <span className="notification-state" aria-hidden="true" />
+            <div className="notification-copy">
+              <div className="notification-meta"><span>{notification.type.replaceAll("_", " ")}</span><time dateTime={notification.createdAt}>{notificationTime(notification.createdAt)}</time></div>
+              <strong>{notification.title}</strong>
+              <p>{notification.message}</p>
+            </div>
+            <button className="notification-delete" type="button" onClick={() => void remove(notification.id)} disabled={busyAction === notification.id} aria-label={`Delete ${notification.title}`} title="Delete notification"><Trash2 size={15} /></button>
+          </article>
+        )) : <div className="notification-empty"><span><Check size={22} /></span><strong>You are all caught up</strong><p>New budget, goal, and account updates will appear here.</p></div>}
+      </div>
+    </aside>
+  );
 }
 
 export function TransactionTrash({ onRestored }: { onRestored: () => void }) {
