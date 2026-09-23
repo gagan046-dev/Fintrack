@@ -3,6 +3,16 @@ import { apiError } from "@/lib/api-response";
 import { getBudgetMonthRange } from "@/lib/budget-schema";
 import { getDb } from "@/lib/db";
 import { notifyHousehold } from "@/lib/notifications";
+import { captureNetWorthSnapshot, reconcileAccountBalance } from "@/lib/connected-finance";
+
+function advanceRenewalDate(from: Date, frequency: "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY") {
+  const next = new Date(from);
+  if (frequency === "WEEKLY") next.setUTCDate(next.getUTCDate() + 7);
+  else if (frequency === "MONTHLY") next.setUTCMonth(next.getUTCMonth() + 1);
+  else if (frequency === "QUARTERLY") next.setUTCMonth(next.getUTCMonth() + 3);
+  else next.setUTCFullYear(next.getUTCFullYear() + 1);
+  return next;
+}
 
 export async function GET(request: Request) {
   try {
@@ -15,7 +25,9 @@ export async function GET(request: Request) {
     const households = await getDb().household.findMany({ select: { id: true } });
     let budgetsCreated = 0;
     let remindersGenerated = 0;
+    let subscriptionsRenewed = 0;
     for (const household of households) {
+      const accountsTouched = new Set<string>();
       await getDb().$transaction(async (db) => {
         const templates = await db.budgetTemplate.findMany({ where: { householdId: household.id, active: true, startMonth: { lte: start } } });
         for (const template of templates) {
@@ -40,7 +52,40 @@ export async function GET(request: Request) {
           await notifyHousehold(db, { householdId: household.id, type: "SYSTEM", title: `${entity.name} due soon`, message: `${entity.name} is due in ${days} day${days === 1 ? "" : "s"}.`, dedupeKey: `due:${schedule.id}:${dueDate.toISOString().slice(0, 10)}` });
           remindersGenerated += 1;
         }
+        const dueSubs = await db.subscription.findMany({ where: { householdId: household.id, status: "ACTIVE", renewalDate: { lte: now } } });
+        if (dueSubs.length) {
+          const defaultAccount = await db.account.findFirst({ where: { householdId: household.id, type: { in: ["CHECKING", "SAVINGS"] } }, orderBy: { createdAt: "asc" } });
+          for (const sub of dueSubs) {
+            const chargedAt = new Date(sub.renewalDate);
+            await db.transaction.create({
+              data: {
+                householdId: household.id,
+                accountId: defaultAccount?.id ?? null,
+                description: `${sub.name} subscription renewal`,
+                merchant: sub.vendor,
+                category: sub.category,
+                paymentType: "Subscription",
+                amount: sub.amount,
+                type: "EXPENSE",
+                source: "MANUAL",
+                transactionAt: chargedAt,
+                externalId: `subscription:${sub.id}:${chargedAt.toISOString().slice(0, 10)}`,
+              },
+            });
+            await db.subscriptionEvent.create({ data: { householdId: household.id, subscriptionId: sub.id, action: "UPDATED", reason: "auto_renewal" } });
+            const nextRenewal = advanceRenewalDate(sub.renewalDate, sub.frequency);
+            await db.subscription.update({ where: { id: sub.id }, data: { renewalDate: nextRenewal } });
+            if (defaultAccount) accountsTouched.add(defaultAccount.id);
+            subscriptionsRenewed += 1;
+          }
+        }
       });
+      for (const accountId of accountsTouched) {
+        await getDb().$transaction(async (db) => {
+          await reconcileAccountBalance(db, household.id, accountId, now);
+          await captureNetWorthSnapshot(db, household.id, now);
+        });
+      }
     }
     let deletionsCompleted = 0;
     const dueDeletions = await getDb().accountDeletionRequest.findMany({ where: { status: "PENDING", executeAfter: { lte: now } }, include: { user: true } });
@@ -55,7 +100,7 @@ export async function GET(request: Request) {
       deletionsCompleted += 1;
     }
     await getDb().rateLimitBucket.deleteMany({ where: { resetAt: { lt: new Date(now.getTime() - 7 * 86_400_000) } } });
-    return Response.json({ budgetsCreated, remindersGenerated, deletionsCompleted });
+    return Response.json({ budgetsCreated, remindersGenerated, subscriptionsRenewed, deletionsCompleted });
   } catch (error) {
     return apiError(error);
   }
