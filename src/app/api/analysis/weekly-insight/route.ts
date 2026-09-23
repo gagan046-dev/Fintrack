@@ -82,7 +82,7 @@ export async function GET() {
     } else {
       try {
         const result = await generateText({
-          model: openrouter(process.env.OPENROUTER_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b:free"),
+          model: openrouter(process.env.OPENROUTER_MODEL ?? "nvidia/llama-3.1-nemotron-ultra-253b-v1:free"),
           instructions: "Write a 2-3 sentence weekly spending recap from the supplied JSON facts. Be factual and concise. Never invent numbers. Do not give investment, credit, tax, legal, or purchase advice. Use the provided currency symbol prefix. Plain text only.",
           prompt: JSON.stringify(facts),
           maxOutputTokens: 220,

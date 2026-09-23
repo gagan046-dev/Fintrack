@@ -2,7 +2,7 @@ import { ApiResponseError, apiError } from "@/lib/api-response";
 import { analysisRequestSchema } from "@/lib/analysis-schema";
 import { requireHouseholdContext } from "@/lib/auth-context";
 import { getDb } from "@/lib/db";
-import { prepareNemotronAnalysis } from "@/lib/nemotron-analysis";
+import { DEFAULT_OPENROUTER_MODEL, prepareNemotronAnalysis } from "@/lib/nemotron-analysis";
 import { protectMutation } from "@/lib/request-protection";
 import { ZodError } from "zod";
 
@@ -53,7 +53,11 @@ export async function POST(request: Request) {
             answer = candidate;
             send("delta", { text: delta });
           }
-          send("done", { answer, chart: result.chart, metadata: { ephemeral: true, model: process.env.OPENROUTER_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b:free" } });
+          const finishReason = await Promise.resolve(result.finishReason).catch(() => "unknown");
+          if (!answer.trim()) {
+            throw new ApiResponseError(`The analyst produced no output. Check that OPENROUTER_API_KEY is valid and OPENROUTER_MODEL is a real model on OpenRouter (finishReason=${String(finishReason)}).`, 502);
+          }
+          send("done", { answer, chart: result.chart, metadata: { ephemeral: true, model: process.env.OPENROUTER_MODEL ?? DEFAULT_OPENROUTER_MODEL, finishReason } });
         } catch (error) {
           const details = error instanceof Error ? { name: error.name } : { name: "UnknownError" };
           console.error("OpenRouter Nemotron analysis stream failed.", details);

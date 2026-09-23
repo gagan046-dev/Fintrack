@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     if (unresolved.length && process.env.OPENROUTER_API_KEY?.trim()) {
       try {
         const aiResult = await generateText({
-          model: openrouter(process.env.OPENROUTER_MODEL ?? "nvidia/nemotron-3-ultra-550b-a55b:free"),
+          model: openrouter(process.env.OPENROUTER_MODEL ?? "nvidia/llama-3.1-nemotron-ultra-253b-v1:free"),
           instructions: `Categorize each transaction into exactly one of: ${CATEGORIES.join(", ")}. Return strict JSON: {"suggestions":[{"id":"...","category":"..."}]}. Use "Uncategorized" if unclear. Never invent transactions, never provide advice.`,
           prompt: JSON.stringify({ transactions: unresolved }),
           maxOutputTokens: 400,
