@@ -26,7 +26,6 @@ import {
   CircleHelp,
   CircleDollarSign,
   CreditCard,
-  FileText,
   FileUp,
   Goal,
   Grid2X2,
@@ -72,7 +71,6 @@ import { useCurrencyFormatter } from "@/components/currency-context";
 import { OperationsWorkspace } from "@/components/operations-workspace";
 import { TransactionEditor } from "./transaction-editor";
 import { EphemeralAnalyst } from "./analyst-panel";
-import { TaxPlanningWorkspace } from "./tax-workspace";
 import { WeeklyInsightCard } from "./weekly-insight-card";
 
 type TransactionType = "expense" | "income";
@@ -252,7 +250,6 @@ const planningNavItems = [
   { label: "Budgets", target: "Budgets", icon: Target },
   { label: "Goals", target: "Goals", icon: Goal },
   { label: "EMI", target: "EMI", icon: CreditCard },
-  { label: "Tax planning", target: "TaxPlanning", icon: FileText },
   { label: "Household", target: "Household", icon: Users },
 ];
 
@@ -1799,8 +1796,6 @@ export function FinanceDashboard({
                   ? `Good morning, ${userName.split(" ")[0]}.`
                   : activeNav === "Position"
                     ? "Financial position"
-                    : activeNav === "TaxPlanning"
-                      ? "Tax planning"
                     : activeNav}
               </h1>
               <p>
@@ -1808,8 +1803,6 @@ export function FinanceDashboard({
                   ? "Here’s your financial snapshot for today."
                   : activeNav === "Position"
                     ? "Manage your assets, debts, and recurring bills."
-                  : activeNav === "TaxPlanning"
-                    ? "Track section 80C/80D/80G deductions and estimate your income tax."
                   : `Review and manage your ${activeNav.toLowerCase()}.`}
               </p>
             </div>
@@ -1952,8 +1945,6 @@ export function FinanceDashboard({
             <FinancialPositionWorkspace view="emi" />
           ) : activeNav === "Operations" ? (
             <OperationsWorkspace />
-          ) : activeNav === "TaxPlanning" ? (
-            <TaxPlanningWorkspace />
           ) : activeNav === "Household" ? (
             <HouseholdWorkspace />
           ) : activeNav === "Settings" ? (

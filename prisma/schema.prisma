@@ -260,7 +260,6 @@ model Transaction {
   transactionAt DateTime
   externalId    String?
   isRecurring   Boolean           @default(false)
-  taxSection    String?
   deletedAt     DateTime?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
@@ -270,7 +269,6 @@ model Transaction {
   @@index([householdId, category, transactionAt])
   @@index([householdId, merchant])
   @@index([householdId, accountId, transactionAt])
-  @@index([householdId, taxSection, transactionAt])
   @@index([transferId])
   @@index([recurringPatternId])
 }
