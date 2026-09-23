@@ -1,7 +1,10 @@
 import { z } from "zod";
+import { TAX_SECTIONS } from "@/lib/tax";
 
 const transactionType = z.enum(["expense", "income"]);
 const transactionSource = z.enum(["manual", "csv_import", "xlsx_import", "bank_api", "email_receipt"]);
+const taxSectionCodes = TAX_SECTIONS.map((section) => section.code) as [string, ...string[]];
+const taxSection = z.enum(taxSectionCodes).nullable().optional();
 const moneyAmount = z.union([z.number().finite(), z.string().trim()])
   .transform((value) => String(value))
   .pipe(z.string().regex(/^(?:0|[1-9]\d{0,11})(?:\.\d{1,2})?$/, "Use a positive amount with no more than two decimal places."))
@@ -18,6 +21,7 @@ export const transactionInputSchema = z.object({
   date: z.iso.date(),
   accountId: z.string().trim().min(1).nullable().optional(),
   externalId: z.string().trim().max(255).nullable().optional(),
+  taxSection,
 });
 
 export const transactionUpdateSchema = transactionInputSchema.partial().refine(
@@ -62,6 +66,7 @@ export function toTransactionCreateData(input: z.infer<typeof transactionInputSc
     transactionAt: new Date(`${input.date}T12:00:00.000Z`),
     accountId: input.accountId ?? null,
     externalId: input.externalId ?? null,
+    taxSection: input.taxSection ?? null,
   };
 }
 
@@ -78,6 +83,7 @@ export function toTransactionDto(transaction: {
   createdAt: Date;
   updatedAt: Date;
   accountId: string | null;
+  taxSection?: string | null;
 }) {
   return {
     id: transaction.id,
@@ -90,6 +96,7 @@ export function toTransactionDto(transaction: {
     source: transaction.source.toLowerCase(),
     date: transaction.transactionAt.toISOString().slice(0, 10),
     accountId: transaction.accountId,
+    taxSection: transaction.taxSection ?? null,
     createdAt: transaction.createdAt.toISOString(),
     updatedAt: transaction.updatedAt.toISOString(),
   };
