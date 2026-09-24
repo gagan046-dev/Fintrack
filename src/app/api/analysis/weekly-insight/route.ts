@@ -95,7 +95,7 @@ export async function GET() {
       }
     }
 
-    return Response.json({ data: { facts, narrative } }, { headers: { "Cache-Control": "private, max-age=60" } });
+    return Response.json({ data: { facts, narrative } }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return apiError(error);
   }

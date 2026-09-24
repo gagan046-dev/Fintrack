@@ -47,15 +47,28 @@ export function WeeklyInsightCard() {
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/analysis/weekly-insight", { cache: "no-store" })
-      .then(async (response) => {
+    async function fetchInsight() {
+      try {
+        const response = await fetch("/api/analysis/weekly-insight", { cache: "no-store" });
         if (!response.ok) throw new Error("Weekly insight unavailable.");
-        return response.json() as Promise<{ data: WeeklyInsight }>;
-      })
-      .then((result) => { if (active) setInsight(result.data); })
-      .catch((loadError: Error) => { if (active) setError(loadError.message); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+        const result = await response.json() as { data: WeeklyInsight };
+        if (active) {
+          setInsight(result.data);
+          setError("");
+        }
+      } catch (loadError) {
+        if (active) setError(loadError instanceof Error ? loadError.message : "Weekly insight unavailable.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    function refreshAfterDataChange() { void fetchInsight(); }
+    void fetchInsight();
+    window.addEventListener("fintrack:data-changed", refreshAfterDataChange);
+    return () => {
+      active = false;
+      window.removeEventListener("fintrack:data-changed", refreshAfterDataChange);
+    };
   }, []);
 
   const facts = insight?.facts;

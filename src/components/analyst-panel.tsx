@@ -38,8 +38,8 @@ type AnalysisPhase = "idle" | "planning" | "analyzing" | "chart" | "responding";
 
 async function responseMessage(response: Response, fallback: string) {
   try {
-    const result = await response.json() as { error?: string };
-    return result.error ?? fallback;
+    const result = await response.json() as { error?: string; issues?: Record<string, string[]> };
+    return Object.values(result.issues ?? {}).flat().find(Boolean) ?? result.error ?? fallback;
   } catch {
     return fallback;
   }
@@ -83,12 +83,15 @@ export function EphemeralAnalyst({ open, onClose }: { open: boolean; onClose: ()
   useEffect(() => {
     function clearOnPageHide() { clearAnalysis(); }
     function clearOnPageShow(event: PageTransitionEvent) { if (event.persisted) clearAnalysis(); }
+    function clearOnDataChange() { clearAnalysis(); }
     window.addEventListener("pagehide", clearOnPageHide);
     window.addEventListener("pageshow", clearOnPageShow);
+    window.addEventListener("fintrack:data-changed", clearOnDataChange);
     return () => {
       controllerRef.current?.abort();
       window.removeEventListener("pagehide", clearOnPageHide);
       window.removeEventListener("pageshow", clearOnPageShow);
+      window.removeEventListener("fintrack:data-changed", clearOnDataChange);
     };
   }, []);
 
@@ -107,8 +110,11 @@ export function EphemeralAnalyst({ open, onClose }: { open: boolean; onClose: ()
       groupBy !== "auto" ? `group by ${groupBy}` : "",
       preferredChart !== "auto" ? `use a ${preferredChart} chart` : "",
     ].filter(Boolean).join(", ");
-    const prompt = controls ? `${visibleQuestion}. Apply these controls: ${controls}.` : visibleQuestion;
-    const priorHistory = history.filter((message) => message.content).map(({ role, content }) => ({ role, content })).slice(-12);
+    const prompt = (controls ? `${visibleQuestion}. Apply these controls: ${controls}.` : visibleQuestion).slice(0, 900);
+    const priorHistory = history
+      .filter((message) => message.content.trim())
+      .map(({ role, content }) => ({ role, content: content.trim().slice(0, 1200) }))
+      .slice(-12);
     const assistantId = crypto.randomUUID();
     const expectsChart = preferredChart !== "auto" || /\b(chart|graph|plot|trend)\b/i.test(visibleQuestion);
 

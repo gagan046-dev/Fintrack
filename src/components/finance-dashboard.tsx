@@ -2202,13 +2202,14 @@ export function FinanceDashboard({
             setTransactionEditorOpen(false);
             setEditingTransaction(null);
           }}
-          onSaved={(saved) =>
+          onSaved={(saved) => {
             setTransactions((current) =>
               current.some((item) => item.id === saved.id)
                 ? current.map((item) => (item.id === saved.id ? saved : item))
                 : [saved, ...current],
-            )
-          }
+            );
+            window.dispatchEvent(new Event("fintrack:data-changed"));
+          }}
         />
       )}
       {transferOpen && (

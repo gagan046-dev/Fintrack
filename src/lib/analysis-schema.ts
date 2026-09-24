@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const analysisRequestSchema = z.object({
-  question: z.string().trim().min(3).max(600),
+  question: z.string().trim().min(1).max(900),
   history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(1200) }).strict()).max(12).default([]),
 });
 
